@@ -1,4 +1,4 @@
-export enum GroupByType {
+export enum GroupByOption {
     patient = "patient",
     algorithm = "algorithm",
     hospital = "hospital",

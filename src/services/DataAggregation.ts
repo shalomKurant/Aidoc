@@ -1,59 +1,27 @@
-import { GroupByType } from "../enums/GroupByType";
-import { Dictionary } from "lodash";
-import moment from "moment";
-import { IScan } from "../types/IScan";
-import { IGroupByFieldDetails, PatientScanFieldType } from "../types/IGroupByFieldDetails";
-import { dateFormat } from "../constants/Constants";
+import { GroupByOption } from "../enums/GroupByOption";
 import _ from 'lodash';
 
-export class DataAggregation {
-    private groupByFieldsMapping!: Map<GroupByType, IGroupByFieldDetails>;
-    private spesialGroupByFunctionMapping!: Map<PatientScanFieldType, (scan: IScan) => any>;
-    
-    constructor() {
-        this.initializeScanFieldsMapping();
+export class DataAggregation<T> {
+
+    constructor(private groupByFieldsMapping: Map<GroupByOption, Array<keyof T>>, 
+                private specialGroupByFunctionMapping: Map<keyof T, (item: T) => any>) {
     }
     
-    public groupScanResponse(groupByType: GroupByType, scans: Array<IScan>): Dictionary<IScan[]> {
+    public groupDataResponse(groupByType: GroupByOption, items: Array<T>): _.Dictionary<T[]> {
         const fieldDetails = this.groupByFieldsMapping.get(groupByType);
-        return this.groupByParameters(scans, fieldDetails!.fields);
+        return this.groupByParameters(items, fieldDetails!);
     }
 
-    private initializeScanFieldsMapping(): void {
-        this.groupByFieldsMapping = new Map().set(GroupByType.patient, {
-            fields: ["patientId"]
-        }).set(GroupByType.algorithm, {
-            fields: ["algorithmType"]
-        }).set(GroupByType.hospital, {
-            fields: ["hospital"]
-        }).set(GroupByType.bodyPart, {
-            fields: ["bodyPart"]
-        }).set(GroupByType.patientInSameDay, {
-            fields: ["patientId", "date"]
-        }).set(GroupByType.hospitalDepartment, {
-            fields: ["hospital", "bodyPart"]
-        })
-
-        this.spesialGroupByFunctionMapping = new Map().set('date', (scan: IScan) => moment(scan.date).format(dateFormat));
-    }
-    
-    private groupByFunction(scans: IScan[], fieldName: PatientScanFieldType): any {
-        return _.groupBy(scans, (scan: IScan) => 
-            this.spesialGroupByFunctionMapping.has(fieldName) ? 
-            this.spesialGroupByFunctionMapping.get(fieldName)!(scan) : scan[fieldName]);
-    }
-
-    private groupByParameters(scans: IScan[], parameters: Array<PatientScanFieldType>) {
-        let groupedByObject: any = {};
-        parameters.forEach((parameter, index) => {
-            if (index === 0) {
-                groupedByObject = this.groupByFunction(scans, parameter);
-            } else {
-                _.forEach(groupedByObject, (value, key) => {
-                    groupedByObject[key] = this.groupByFunction(scans, parameter);
-                });
-            }
+    private groupByParameters(items: T[], parameters: Array<keyof T>): _.Dictionary<Array<T>> {
+        const groupedByObject = _.groupBy(items, (item: T) => {
+            const valuesToGrouped: Array<string> = parameters.map(parameter => this.getFieldValue(parameter, item));
+            return valuesToGrouped.join('|');
         });
         return groupedByObject;
+    }
+
+    private getFieldValue(parameter: keyof T, item: T): string {
+        return this.specialGroupByFunctionMapping.has(parameter) ? 
+            this.specialGroupByFunctionMapping.get(parameter)!(item) : item[parameter];
     }
 }
